@@ -1,7 +1,9 @@
 import * as pdfjsLib from 'pdfjs-dist';
-import pdfWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 
-pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
+// Use CDN worker URL pinned to the exact installed version — avoids MIME/CORS
+// issues with Vite's hashed asset filenames in production.
+const PDFJS_VERSION = pdfjsLib.version;
+pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${PDFJS_VERSION}/build/pdf.worker.min.mjs`;
 
 export const extractTextFromFile = async (file) => {
   if (!file) return "No content found.";
