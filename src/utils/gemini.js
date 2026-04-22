@@ -3,8 +3,8 @@ import * as pdfjsLib from 'pdfjs-dist';
 // Use CDN worker URL pinned to the exact installed version — avoids MIME/CORS
 // issues with Vite's hashed asset filenames in production.
 const PDFJS_VERSION = '5.5.207';
-// Use the legacy worker for better compatibility across environments
-pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${PDFJS_VERSION}/legacy/build/pdf.worker.min.js`;
+// Use the standard worker for 5.x (mjs)
+pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${PDFJS_VERSION}/build/pdf.worker.min.mjs`;
 
 export const extractTextFromFile = async (file) => {
   console.log("Extracting text from file:", file.name, "Type:", file.type);
