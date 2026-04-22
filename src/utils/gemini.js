@@ -78,6 +78,10 @@ const fetchWithRetry = async (url, options, maxRetries = 3) => {
 };
 
 export const analyzeResume = async (resumeText) => {
+  if (!resumeText || resumeText.trim().length < 30) {
+    throw new Error('Resume text is empty or too short to analyze.');
+  }
+
   const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
 
   if (!apiKey || apiKey === 'your_gemini_api_key_here') {
