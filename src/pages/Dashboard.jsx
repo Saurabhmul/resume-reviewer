@@ -45,10 +45,8 @@ const Dashboard = () => {
     // Kick off Gemini analysis in parallel with the loader animation
     try {
       const text = await extractTextFromFile(file);
-      if (!text || text.trim().length < 30) {
-        throw new Error('Could not extract text from your PDF. The file may be image-based (scanned) or corrupted. Please try a text-based PDF or paste your resume as a .txt file.');
-      }
-      const result = await analyzeResume(text);
+      // If text extraction failed (e.g. scanned PDF), pass the file object for multimodal analysis
+      const result = await analyzeResume(text, text ? null : file);
       analysisResultRef.current = result;
     } catch (err) {
       analysisErrorRef.current = err.message || 'Analysis failed. Please try again.';

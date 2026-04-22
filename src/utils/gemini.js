@@ -40,13 +40,21 @@ export const extractTextFromFile = async (file) => {
       const fullText = pagesText.join('\n\n');
       console.log("Final extracted text length:", fullText.trim().length);
       
+      // If we got almost nothing, return null so we can fallback to full file analysis
+      if (fullText.trim().length < 50) {
+        console.warn("Extracted text is too short, possibly a scanned PDF.");
+        return null;
+      }
+      
       return fullText;
     } catch (err) {
       console.error("Critical PDF Extraction Error:", err);
-      throw err;
+      // Return null to trigger fallback in the UI
+      return null;
     }
   } else {
-    return await file.text();
+    const text = await file.text();
+    return text.trim().length < 50 ? null : text;
   }
 };
 
@@ -69,11 +77,7 @@ const fetchWithRetry = async (url, options, maxRetries = 3) => {
   }
 };
 
-export const analyzeResume = async (resumeText) => {
-  if (!resumeText || resumeText.trim().length < 30) {
-    throw new Error('Resume text is empty or too short to analyze.');
-  }
-
+export const analyzeResume = async (resumeText, fileObject = null) => {
   const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
 
   if (!apiKey || apiKey === 'your_gemini_api_key_here') {
@@ -93,49 +97,67 @@ export const analyzeResume = async (resumeText) => {
 
   const today = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
 
-  const prompt = `You are an expert resume reviewer and ATS (Applicant Tracking System) specialist.
+  let prompt = `You are an expert resume reviewer and ATS (Applicant Tracking System) specialist.
 Today's date is ${today}. Use this as your reference when evaluating any dates, durations, or whether something is current, past, or future.
 Analyze the following resume and return a JSON object with this exact structure:
 
 {
   "score": <integer from 0-100 representing ATS compatibility and overall quality>,
   "summary": "<2-3 sentence executive summary of the resume's overall quality>",
-  "strengths": [
-    "<strength 1>",
-    "<strength 2>",
-    "<strength 3>"
-  ],
-  "weaknesses": [
-    "<critical issue 1>",
-    "<critical issue 2>",
-    "<critical issue 3>"
-  ],
+  "strengths": ["<strength 1>", "<strength 2>", "<strength 3>"],
+  "weaknesses": ["<critical issue 1>", "<critical issue 2>", "<critical issue 3>"],
   "suggestions": [
-    { "title": "<actionable suggestion title>", "desc": "<specific, concrete description of how to improve with an example if possible>" },
-    { "title": "<actionable suggestion title>", "desc": "<specific, concrete description>" },
-    { "title": "<actionable suggestion title>", "desc": "<specific, concrete description>" }
+    { "title": "<suggestion title>", "desc": "<description>" },
+    { "title": "<suggestion title>", "desc": "<description>" },
+    { "title": "<suggestion title>", "desc": "<description>" }
   ]
 }
 
 Scoring guide:
-- 80-100: Excellent ATS compatibility, strong metrics, great keywords
+- 80-100: Excellent ATS compatibility
 - 60-79: Good foundation but needs improvement
-- Below 60: Significant issues with ATS compatibility or content quality
+- Below 60: Significant issues
 
-Be specific and refer to actual content from the resume. Return ONLY the JSON object, no markdown or extra text.
+Be specific. Return ONLY the JSON object.`;
 
-RESUME:
-${resumeText}`;
+  const parts = [];
+  
+  if (resumeText) {
+    prompt += `\n\nRESUME TEXT:\n${resumeText}`;
+    parts.push({ text: prompt });
+  } else if (fileObject) {
+    prompt += `\n\nPlease analyze the provided resume file. Perform OCR if necessary.`;
+    parts.push({ text: prompt });
+    
+    // Convert file to base64 for inlineData
+    const arrayBuffer = await fileObject.arrayBuffer();
+    const base64 = btoa(
+      new Uint8Array(arrayBuffer)
+        .reduce((data, byte) => data + String.fromCharCode(byte), '')
+    );
+    
+    parts.push({
+      inlineData: {
+        mimeType: fileObject.type || "application/pdf",
+        data: base64
+      }
+    });
+  } else {
+    throw new Error("No resume content or file provided for analysis.");
+  }
+
+  // Use gemini-1.5-flash for faster multimodal processing if it's a file
+  const model = fileObject ? 'gemini-1.5-flash' : 'gemini-1.5-flash'; 
 
   const response = await fetchWithRetry(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key=${apiKey}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
+        contents: [{ parts: parts }],
         generationConfig: {
-          temperature: 0.4,
+          temperature: 0.1,
           responseMimeType: 'application/json',
         },
       }),
