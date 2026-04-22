@@ -1,10 +1,9 @@
 import * as pdfjsLib from 'pdfjs-dist';
 
-// Use CDN worker URL pinned to the exact installed version — avoids MIME/CORS
-// issues with Vite's hashed asset filenames in production.
-const PDFJS_VERSION = '5.5.207';
-// Use the standard worker for 5.x (mjs)
-pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${PDFJS_VERSION}/build/pdf.worker.min.mjs`;
+import pdfWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
+
+// Use local bundled worker for maximum reliability
+pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
 
 export const extractTextFromFile = async (file) => {
   console.log("Extracting text from file:", file.name, "Type:", file.type);
@@ -24,9 +23,14 @@ export const extractTextFromFile = async (file) => {
         const page = await pdf.getPage(i);
         const textContent = await page.getTextContent();
         
-        // Simple extraction first to ensure we get something
+        console.log(`Page ${i} raw items:`, textContent.items.length);
+        if (textContent.items.length > 0) {
+          console.log(`Page ${i} sample item:`, JSON.stringify(textContent.items[0]));
+        }
+
+        // Simple extraction
         const pageItems = textContent.items
-          .filter(item => item.str !== undefined)
+          .filter(item => typeof item.str === 'string')
           .map(item => item.str);
         
         console.log(`Page ${i} extracted ${pageItems.length} text items`);
