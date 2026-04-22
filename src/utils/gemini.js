@@ -2,59 +2,45 @@ import * as pdfjsLib from 'pdfjs-dist';
 
 // Use CDN worker URL pinned to the exact installed version — avoids MIME/CORS
 // issues with Vite's hashed asset filenames in production.
-const PDFJS_VERSION = pdfjsLib.version;
-pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${PDFJS_VERSION}/build/pdf.worker.min.mjs`;
+const PDFJS_VERSION = '5.5.207';
+// Use the legacy worker for better compatibility across environments
+pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${PDFJS_VERSION}/legacy/build/pdf.worker.min.js`;
 
 export const extractTextFromFile = async (file) => {
+  console.log("Extracting text from file:", file.name, "Type:", file.type);
   if (!file) return "No content found.";
 
   if (file.type === 'application/pdf' || file.name.endsWith('.pdf')) {
-    const arrayBuffer = await file.arrayBuffer();
-    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-    let fullText = "";
-
-    for (let i = 1; i <= pdf.numPages; i++) {
-      const page = await pdf.getPage(i);
-      const textContent = await page.getTextContent();
-
-      let lines = {};
-      textContent.items.forEach(item => {
-        const y = Math.round(item.transform[5]);
-        let matchedY = Object.keys(lines).find(key => Math.abs(Number(key) - y) < 4);
-        if (!matchedY) {
-          matchedY = y;
-          lines[matchedY] = [];
-        }
-        lines[matchedY].push({ ...item, calcHeight: item.height || item.transform[3] || 10 });
-      });
-
-      const sortedY = Object.keys(lines).map(Number).sort((a, b) => b - a);
-
-      sortedY.forEach(y => {
-        const lineItems = lines[y];
-        lineItems.sort((a, b) => a.transform[4] - b.transform[4]);
-
-        let lineText = "";
-        let lastX = null;
-        lineItems.forEach(item => {
-          if (lastX !== null) {
-            const gap = item.transform[4] - lastX;
-            if (gap > (item.calcHeight * 0.3)) {
-              lineText += " ";
-            }
-          }
-          lineText += item.str;
-          lastX = item.transform[4] + item.width;
-        });
-        fullText += lineText.trim() + "\n";
-      });
-      fullText += "\n";
+    try {
+      const arrayBuffer = await file.arrayBuffer();
+      console.log("PDF ArrayBuffer size:", arrayBuffer.byteLength);
+      
+      const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+      const pdf = await loadingTask.promise;
+      console.log("PDF loaded successfully, pages:", pdf.numPages);
+      
+      let pagesText = [];
+      for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i);
+        const textContent = await page.getTextContent();
+        
+        // Simple extraction first to ensure we get something
+        const pageItems = textContent.items
+          .filter(item => item.str !== undefined)
+          .map(item => item.str);
+        
+        console.log(`Page ${i} extracted ${pageItems.length} text items`);
+        pagesText.push(pageItems.join(' '));
+      }
+      
+      const fullText = pagesText.join('\n\n');
+      console.log("Final extracted text length:", fullText.trim().length);
+      
+      return fullText;
+    } catch (err) {
+      console.error("Critical PDF Extraction Error:", err);
+      throw err;
     }
-
-    fullText = fullText.replace(/(%[A-Za-zÏï]|%\?)/g, '•');
-    fullText = fullText.replace(/[\\]/g, '');
-    fullText = fullText.replace(/ {2,}/g, ' ');
-    return fullText;
   } else {
     return await file.text();
   }
