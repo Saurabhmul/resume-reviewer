@@ -146,8 +146,8 @@ Be specific. Return ONLY the JSON object.`;
     throw new Error("No resume content or file provided for analysis.");
   }
 
-  // Use gemini-1.5-flash for faster multimodal processing if it's a file
-  const model = fileObject ? 'gemini-1.5-flash' : 'gemini-1.5-flash'; 
+  // Use the model specified by the user
+  const model = 'gemini-2.5-pro'; 
 
   const response = await fetchWithRetry(
     `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
